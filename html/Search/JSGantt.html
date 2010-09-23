@@ -1,0 +1,97 @@
+<& /Elements/Header, Title => $title,
+    Refresh => $session{'tickets_refresh_interval'} || RT->Config->Get('SearchResultsRefreshInterval', $session{'CurrentUser'} ),
+    &>
+<& /Ticket/Elements/Tabs, Title => $title, Query => $ARGS{Query}, &>
+<div style="position:relative" class="gantt" id="GanttChartDIV"></div>
+<script>
+
+  // here's all the html code neccessary to display the chart object
+
+  // Future idea would be to allow XML file name to be passed in and chart tasks built from file.
+
+  var g = new JSGantt.GanttChart('g',document.getElementById('GanttChartDIV'),
+  '<% RT->Config->Get('JSGanttDefaultFormat') || 'day' %>' );
+
+    g.setShowRes(<% RT->Config->Get('JSGanttShowOwner')? 1 : 0 %>);
+    g.setShowDur(<% RT->Config->Get('JSGanttShowDuration')? 1 : 0 %> );
+
+% my $show_progress = RT->Config->Get('JSGanttShowProgress' );
+% if ( $show_progress ) {
+        g.setShowComp(1);
+% } else {
+    g.setShowComp(0);
+% }
+
+    g.setCaptionType('Resource');  // Set to Show Caption (None,Caption,Resource,Duration,Complete)
+
+
+  //var gr = new Graphics();
+
+  if( g ) {
+
+    // Parameters             (pID, pName,                  pStart,      pEnd,        pColor,   pLink,          pMile, pRes,  pComp, pGroup, pParent, pOpen, pDepend, pCaption)
+    
+    // You can also use the XML file parser JSGantt.parseXML('project.xml',g)
+%   use JSON;
+%   for my $id ( @$ids ) {
+%       my $json = to_json( [ $id, map { $info->{$id}{$_} } qw/name start end
+%           color link milestone owner progress has_members parent open
+%           depends/ ] );
+%       $json =~ s/^\[//; $json =~ s/\]$//;
+        g.AddTaskItem(new JSGantt.TaskItem( <% $json |n%> ));
+%   }
+
+
+    g.Draw();    
+    g.DrawDependencies();
+
+  }
+  else {
+
+    alert("not defined");
+
+  }
+
+</script>
+
+<%init>
+my $title = loc('JSGantt Results');
+my @Tickets;
+
+if ( $Ticket ) {
+    @Tickets = RT::Extension::JSGantt->AllRelatedTickets(
+        Ticket     => $Ticket,
+        CurrentUser => $session{CurrentUser},
+    );
+}
+elsif ($Query) {
+    my $Tickets = RT::Tickets->new( $session{'CurrentUser'} );
+    $Tickets->FromSQL($Query);
+    if ( $OrderBy =~ /\|/ ) {
+
+        # Multiple Sorts
+        my @OrderBy = split /\|/, $OrderBy;
+        my @Order   = split /\|/, $Order;
+        $Tickets->OrderByCols(
+            map { { FIELD => $OrderBy[$_], ORDER => $Order[$_] } }
+              ( 0 .. $#OrderBy ) );
+    }
+    else {
+        $Tickets->OrderBy( FIELD => $OrderBy, ORDER => $Order );
+    }
+    @Tickets = @{ $Tickets->ItemsArrayRef };
+}
+
+my ( $ids, $info ) = RT::Extension::JSGantt->TicketsInfo(
+    Tickets     => \@Tickets,
+    CurrentUser => $session{CurrentUser},
+);
+
+</%init>
+
+<%args>
+$Query => undef
+$OrderBy => 'id'
+$Order => 'ASC'
+$Ticket => undef
+</%args>
