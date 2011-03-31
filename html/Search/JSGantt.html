@@ -1,7 +1,15 @@
 <& /Elements/Header, Title => $title,
     Refresh => $session{'tickets_refresh_interval'} || RT->Config->Get('SearchResultsRefreshInterval', $session{'CurrentUser'} ),
     &>
+
+% if ( $RT::VERSION lt '3.9.6' ) {
 <& /Ticket/Elements/Tabs, Title => $title, Query => $ARGS{Query}, &>
+% } else {
+<& /Elements/Tabs &>
+%# this space is to make following elements a bit lower to avoid overlap
+%# &nbsp;
+% }
+
 <div style="position:relative" class="gantt" id="GanttChartDIV"></div>
 <script>
 
@@ -10,17 +18,11 @@
   // Future idea would be to allow XML file name to be passed in and chart tasks built from file.
 
   var g = new JSGantt.GanttChart('g',document.getElementById('GanttChartDIV'),
-  '<% RT->Config->Get('JSGanttDefaultFormat') || 'day' %>' );
+  '<% $options{'DefaultFormat'} || 'day' %>' );
 
-    g.setShowRes(<% RT->Config->Get('JSGanttShowOwner')? 1 : 0 %>);
-    g.setShowDur(<% RT->Config->Get('JSGanttShowDuration')? 1 : 0 %> );
-
-% my $show_progress = RT->Config->Get('JSGanttShowProgress' );
-% if ( $show_progress ) {
-        g.setShowComp(1);
-% } else {
-    g.setShowComp(0);
-% }
+    g.setShowRes(<% $options{'ShowOwner'}? 1 : 0 %>);
+    g.setShowDur(<% $options{'ShowDuration'}? 1 : 0 %> );
+    g.setShowComp(<% $options{'ShowProgress'} ? 1 : 0 %> );
 
     g.setCaptionType('Resource');  // Set to Show Caption (None,Caption,Resource,Duration,Complete)
 
@@ -58,6 +60,10 @@
 my $title = loc('JSGantt Results');
 my @Tickets;
 
+my %options;
+if ( RT->Config->Get('JSGanttOptions') ) {
+    %options = RT->Config->Get('JSGanttOptions');
+}
 if ( $Ticket ) {
     @Tickets = RT::Extension::JSGantt->AllRelatedTickets(
         Ticket     => $Ticket,

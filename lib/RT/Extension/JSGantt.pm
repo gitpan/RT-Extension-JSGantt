@@ -1,9 +1,73 @@
+# BEGIN BPS TAGGED BLOCK {{{
+#
+# COPYRIGHT:
+#
+# This software is Copyright (c) 1996-2010 Best Practical Solutions, LLC
+#                                          <jesse@bestpractical.com>
+#
+# (Except where explicitly superseded by other copyright notices)
+#
+#
+# LICENSE:
+#
+# This work is made available to you under the terms of Version 2 of
+# the GNU General Public License. A copy of that license should have
+# been provided with this software, but in any event can be snarfed
+# from www.gnu.org.
+#
+# This work is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/licenses/old-licenses/gpl-2.0.html.
+#
+#
+# CONTRIBUTION SUBMISSION POLICY:
+#
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+#
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+#
+# END BPS TAGGED BLOCK }}}
+
+=head1 NAME
+
+RT::Extension::JSGantt - Gantt charts for your tickets
+
+=head1 SYNOPSIS
+
+    use RT::Extension::JSGantt;
+  
+=cut
+
 package RT::Extension::JSGantt;
 
-our $VERSION = '0.04';
+our $VERSION = '0.10';
 
 use warnings;
 use strict;
+
+=head2 AllRelatedTickets
+
+Given a ticket, return all the relative tickets, including the original ticket.
+
+=cut
 
 sub AllRelatedTickets {
     my $class = shift;
@@ -40,6 +104,12 @@ sub AllRelatedTickets {
     return @tickets;
 }
 
+=head2 TicketsInfo
+
+Given tickets, resolve useful info for jsgantt.js
+Returns a 2 elements array, 1st is the ids arrayref, 2nd is the info hashref.
+
+=cut
 
 sub TicketsInfo {
     my $class = shift;
@@ -47,11 +117,17 @@ sub TicketsInfo {
 
 
     my ( @ids, %info );
-    my @colors = grep { defined } RT->Config->Get('JSGanttColorScheme');
-    @colors = ( 'ff0000', 'ffff00', 'ff00ff', '00ff00', '00ffff', '0000ff' )
-      unless @colors;
+    my %options = RT->Config->Get('JSGanttOptions');
+
+    my @colors;
+    if ( $options{ColorScheme} ) {
+        @colors = @{$options{ColorScheme}};
+    }
+    else {
+        @colors =
+          ( 'ff0000', 'ffff00', 'ff00ff', '00ff00', '00ffff', '0000ff' );
+    }
     my $i;
-    my $show_progress = RT->Config->Get('JSGanttShowProgress' );
 
     my ( $min_start, $min_start_obj );
 
@@ -66,60 +142,8 @@ sub TicketsInfo {
             $parent = $Ticket->MemberOf->First->TargetObj->id;
         }
 
-        # find start/end, this is, uhh, long long way to go
-        my ( $start_obj, $start ) = _GetDate( $Ticket, 'Starts', 'Started' );
-        my ( $end_obj, $end ) = _GetDate( $Ticket, 'Due' );
-
-        # if $start or $end is empty still
-        unless ( $start && $end ) {
-            my $hours_per_day = RT->Config->Get('JSGanttWorkingHoursPerDay')
-              || 8;
-            my $total_time =
-              defined $Ticket->TimeLeft && $Ticket->TimeLeft =~ /\d/
-              ? ( $Ticket->TimeWorked + $Ticket->TimeLeft )
-              : $Ticket->TimeEstimated;
-            $total_time ||= 0;
-            my $days = int( $total_time / ( 60 * $hours_per_day ) );
-            $days ||= RT->Config->Get('JSGanttDefaultDays') || 7;
-
-            # since we only use date without time, let's make days inclusive
-            # ( i.e. 5/12/2010 minus 3 days is 5/10/2010. 10,11,12, 3 days! )
-            $days = $days =~ /\./ ? int $days : $days - 1;
-            $days = 0 if $days < 0;
-
-            if ( $start && !$end ) {
-                $end_obj = RT::Date->new( $args{CurrentUser} );
-                $end_obj->Set( Value => $start_obj->Unix );
-                $end_obj->AddDays($days);
-                my ( $day, $month, $year ) =
-                  ( $end_obj->Localtime('user') )[ 3, 4, 5 ];
-                $end = join '/', $month + 1, $day, $year;
-            }
-
-            if ( $end && !$start ) {
-                $start_obj = RT::Date->new( $args{CurrentUser} );
-                $start_obj->Set( Value => $end_obj->Unix );
-                $start_obj->AddDays( -1 * $days );
-                my ( $day, $month, $year ) =
-                  ( $start_obj->Localtime('user') )[ 3, 4, 5 ];
-                $start = join '/', $month + 1, $day, $year;
-            }
-        }
-
-        if ( !$start ) {
-            $RT::Logger->warning( "Ticket "
-                  . $Ticket->id
-                  . " doesn't have Starts/Started defined, and we can't figure it out either"
-            );
-            $start = $end;
-        }
-        if ( !$end ) {
-            $RT::Logger->warning( "Ticket "
-                  . $Ticket->id
-                  . " doesn't have Due defined, and we can't figure it out either"
-            );
-            $end = $start;
-        }
+        # find start/end
+        my ( $start_obj, $start, $end_obj, $end ) = _GetTimeRange( $Ticket, %args );
 
         if ( $start_obj
             && ( !$min_start_obj || $min_start_obj->Unix > $start_obj->Unix ) )
@@ -140,7 +164,7 @@ sub TicketsInfo {
             }
         }
 
-        if ($show_progress) {
+        if ($options{ShowProgress}) {
             my $total_time =
               defined $Ticket->TimeLeft && $Ticket->TimeLeft =~ /\d/
               ? ( $Ticket->TimeWorked + $Ticket->TimeLeft )
@@ -184,13 +208,104 @@ sub TicketsInfo {
         $min_start = join '/', $month + 1, $day, $year;
     }
 
-    my $no_dates_color = RT->Config->Get('JSGanttNullDatesColor') || '333';
+    my $no_dates_color = $options{NullDatesColor} || '333';
     for my $id (@ids) {
         $info{$id}{color} = $no_dates_color unless $info{$id}{start};
         $info{$id}{start} ||= $min_start;
         $info{$id}{end}   ||= $min_start;
     }
     return \@ids, \%info;
+}
+
+
+=head2 GetTimeRange
+
+Given a ticket, resolve it's start/end.
+Returns an array like ( $start_obj, $start, $end_obj, $end )
+$start and $end are strings like 3/21/2011
+
+=cut
+
+sub _GetTimeRange {
+    my ( $Ticket, %args ) = @_;
+    my %options = RT->Config->Get('JSGanttOptions');
+
+    # the, uh, long way
+    my ( $start_obj, $start ) = _GetDate( $Ticket, 'Starts', 'Started' );
+    my ( $end_obj, $end ) = _GetDate( $Ticket, 'Due' );
+
+    if ( !$start ) {
+        my $Transactions = $Ticket->Transactions;
+        while ( my $Transaction = $Transactions->Next ) {
+            next
+              unless $Transaction->TimeTaken
+                  || (   $Transaction->Type eq 'Set'
+                      && $Transaction->Field eq 'TimeWorked'
+                      && $Transaction->NewValue > $Transaction->OldValue );
+            $start_obj = $Transaction->CreatedObj;
+            my ( $day, $month, $year ) =
+              ( $start_obj->Localtime('user') )[ 3, 4, 5 ];
+            $start = join '/', $month + 1, $day, $year;
+            last;
+        }
+    }
+
+    # if $start or $end is empty still
+    unless ( $start && $end ) {
+        my $hours_per_day = $options{WorkingHoursPerDay} || 8;
+        my $total_time =
+          defined $Ticket->TimeLeft && $Ticket->TimeLeft =~ /\d/
+          ? ( $Ticket->TimeWorked + $Ticket->TimeLeft )
+          : $Ticket->TimeEstimated;
+        my $days;
+        if ( $total_time ) {
+            $days = $total_time / ( 60 * $hours_per_day );
+        }
+        else {
+            $days = $options{'DefaultDays'} || 7;
+        }
+
+        # since we only use date without time, let's make days inclusive
+        # ( i.e. 5/12/2010 minus 3 days is 5/10/2010. 10,11,12, 3 days! )
+        $days = $days =~ /\./ ? int $days : $days - 1;
+        $days = 0 if $days < 0;
+
+        if ( $start && !$end ) {
+            $end_obj = RT::Date->new( $args{CurrentUser} );
+            $end_obj->Set( Value => $start_obj->Unix );
+            $end_obj->AddDays($days) if $days;
+            my ( $day, $month, $year ) =
+              ( $end_obj->Localtime('user') )[ 3, 4, 5 ];
+            $end = join '/', $month + 1, $day, $year;
+        }
+
+        if ( $end && !$start ) {
+            $start_obj = RT::Date->new( $args{CurrentUser} );
+            $start_obj->Set( Value => $end_obj->Unix );
+            $start_obj->AddDays( -1 * $days ) if $days;
+            my ( $day, $month, $year ) =
+              ( $start_obj->Localtime('user') )[ 3, 4, 5 ];
+            $start = join '/', $month + 1, $day, $year;
+        }
+    }
+
+    if ( !$start ) {
+        $RT::Logger->warning( "Ticket "
+              . $Ticket->id
+              . " doesn't have Starts/Started defined, and we can't figure it out either"
+        );
+        $start = $end if $end;
+    }
+
+    if ( !$end ) {
+        $RT::Logger->warning( "Ticket "
+              . $Ticket->id
+              . " doesn't have Due defined, and we can't figure it out either"
+        );
+        $end = $start if $start;
+    }
+
+    return ( $start_obj, $start, $end_obj, $end );
 }
 
 sub _RelatedTickets {
@@ -279,57 +394,5 @@ sub _GetOrderedTickets {
         }
     }
 }
-
-
-=head1 NAME
-
-RT::Extension::JSGantt - Gantt charts for your tickets
-
-
-=head1 SYNOPSIS
-
-    use RT::Extension::JSGantt;
-
-  
-=head1 DESCRIPTION
-
-
-=head1 AUTHOR
-
-sunnavy C<< <sunnavy@bestpractical.com> >>
-
-
-=head1 LICENCE AND COPYRIGHT
-
-Copyright (c) 2010, Best Practical Solutions, LLC.  All rights reserved.
-
-This module is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself. See L<perlartistic>.
-
-
-=head1 DISCLAIMER OF WARRANTY
-
-BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
-FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN
-OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
-PROVIDE THE SOFTWARE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
-EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE
-ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH
-YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL
-NECESSARY SERVICING, REPAIR, OR CORRECTION.
-
-IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
-WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
-REDISTRIBUTE THE SOFTWARE AS PERMITTED BY THE ABOVE LICENCE, BE
-LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL,
-OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE
-THE SOFTWARE (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING
-RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
-FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
-SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
-SUCH DAMAGES.
-
-=cut
 
 1;
