@@ -53,15 +53,16 @@ RT::Extension::JSGantt - Gantt charts for your tickets
 =head1 SYNOPSIS
 
     use RT::Extension::JSGantt;
-  
+
 =cut
 
 package RT::Extension::JSGantt;
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 use warnings;
 use strict;
+use List::MoreUtils 'insert_after', 'uniq';
 
 =head2 AllRelatedTickets
 
@@ -74,7 +75,6 @@ sub AllRelatedTickets {
     my %args = ( Ticket => undef, CurrentUser => undef, @_ );
 
     my @tickets;
-    my %checked;
     my @to_be_checked;
     my $ticket = RT::Ticket->new( $args{CurrentUser} );
     $ticket->Load( $args{Ticket} );
@@ -99,7 +99,7 @@ sub AllRelatedTickets {
             }
         }
 
-        _GetOrderedTickets( \@tickets, \@to_be_checked, \%checked );
+        @tickets = _GetOrderedTickets( @to_be_checked );
     }
     return @tickets;
 }
@@ -124,23 +124,32 @@ sub TicketsInfo {
         @colors = @{$options{ColorScheme}};
     }
     else {
-        @colors =
-          ( 'ff0000', 'ffff00', 'ff00ff', '00ff00', '00ffff', '0000ff' );
+        @colors = (
+            '66cc66', 'ff6666', 'ffcc66', '663399', '3333cc', '339933',
+            '993333', '996633', '33cc33', 'cc3333', 'cc9933', '6633cc'
+        );
     }
     my $i;
 
     my ( $min_start, $min_start_obj );
 
+    my %color_map;
+    if ( $options{ColorSchemeByOwner} ) {
+        my @owner_names = uniq map { $_->OwnerObj->Name } @{ $args{Tickets} };
+        @color_map{@owner_names} = @colors[0 .. $#owner_names];
+        if (   ref $options{ColorSchemeByOwner}
+            && ref $options{ColorSchemeByOwner} eq 'HASH' )
+        {
+            %color_map = ( %color_map, %{ $options{ColorSchemeByOwner} } );
+        }
+    }
+
     for my $Ticket (@{$args{Tickets}}) {
         my $progress = 0;
         my $subject = $Ticket->Subject;
 
-        my $parent = 0;
-        if ( $Ticket->MemberOf->Count ) {
-            # skip the remote links
-            next unless $Ticket->MemberOf->First->TargetObj;
-            $parent = $Ticket->MemberOf->First->TargetObj->id;
-        }
+        my $parent = _ParentTicket( $Ticket );
+        $parent = $parent ? $parent->id : 0;
 
         # find start/end
         my ( $start_obj, $start, $end_obj, $end ) = _GetTimeRange( $Ticket, %args );
@@ -153,13 +162,28 @@ sub TicketsInfo {
         }
 
         my $has_members = $Ticket->Members->Count ? 1 : 0;
+        if ($has_members) {
+
+           # need to examine more as it may not the first parent of it's members
+            my $members = $Ticket->Members;
+            my $indeed_has_members;
+            while ( my $member = $members->Next ) {
+                if ( $member->BaseObj->MemberOf->First->TargetObj->id == $Ticket->id )
+                {
+                    $indeed_has_members = 1;
+                    last;
+                }
+            }
+
+            $has_members = $indeed_has_members || 0;
+        }
 
         my $depends = $Ticket->DependsOn;
         my @depends;
         if ( $depends->Count ) {
             while ( my $d = $depends->Next ) {
                 # skip the remote links
-                next unless $d->TargetObj; 
+                next unless $d->TargetObj;
                 push @depends, $d->TargetObj->id;
             }
         }
@@ -181,8 +205,12 @@ sub TicketsInfo {
             name  => ( $Ticket->id . ': ' . substr $subject, 0, 30 ),
             start => $start,
             end   => $end,
-            color => $colors[ $i++ % @colors ],
-            link  => (
+            color => (
+                  $options{ColorSchemeByOwner}
+                ? $color_map{ $Ticket->OwnerObj->Name }
+                : $colors[ $i++ % @colors ]
+            ),
+            link => (
                     RT->Config->Get('WebPath')
                   . '/Ticket/Display.html?id='
                   . $Ticket->id
@@ -333,7 +361,7 @@ sub _GetDate {
     my $depth;
     if ( $_[0] =~ /^\d+$/ ) {
         $depth = shift;
-    } 
+    }
     else {
         $depth = 0;
     }
@@ -361,38 +389,75 @@ sub _GetDate {
     }
 }
 
-
 sub _GetOrderedTickets {
+    my @tickets;
+    my @to_be_checked = @_;
+
+    my %map;
+    __GetOrderedTickets( \@tickets, \@to_be_checked, {}, 'Members' );
+    __GetOrderedTickets( \@tickets, [@tickets], {}, );
+    return @tickets;
+}
+
+sub __GetOrderedTickets {
     my $tickets       = shift;
     my $to_be_checked = shift;
     my $checked       = shift;
-    while ( my $ticket = shift @$to_be_checked ) {
-        push @$tickets, $ticket
-          unless grep { $ticket->id eq $_->id } @$tickets;
-        next if $checked->{$ticket->id}++;
+    my $type          = shift;
 
-        for my $member ( grep { !$checked->{ $_->id } }
-            _RelatedTickets( $ticket, 'Members' ) )
-        {
-            unshift @$to_be_checked, $member;
-            _GetOrderedTickets( $tickets,$to_be_checked, $checked );
-        }
 
-        for my $parent ( grep { !$checked->{ $_->id } }
-            _RelatedTickets( $ticket, 'MemberOf' ) )
-        {
-            unshift @$to_be_checked, $parent;
-            _GetOrderedTickets( $tickets, $to_be_checked, $checked );
-        }
+    if ( $type && $type eq 'Members' ) {
+        while ( my $ticket = shift @$to_be_checked ) {
+            unless ( grep { $ticket->id eq $_->id } @$tickets ) {
+                my $parent = _ParentTicket($ticket);
 
-        for my $related ( grep { !$checked->{ $_->id } }
-            _RelatedTickets( $ticket, 'DependsOn', 'DependedOnBy', 'RefersTo',
-            'ReferredToBy' ))
-        {
-            push @$to_be_checked, $related;
-            _GetOrderedTickets( $tickets, $to_be_checked, $checked );
+                if ( !$parent || !insert_after { $_->id == $parent->id } $ticket,
+                    @$tickets )
+                {
+                    push @$tickets, $ticket;
+                }
+            }
+
+            next if $checked->{ $ticket->id }++;
+
+            for my $member ( grep { !$checked->{ $_->id } }
+                sort { $b->id <=> $a->id } _RelatedTickets( $ticket, 'Members' ) )
+            {
+                push @$to_be_checked, $member;
+                __GetOrderedTickets( $tickets, $to_be_checked, $checked,
+                    'Members' );
+            }
         }
     }
+    else {
+        while ( my $ticket = shift @$to_be_checked ) {
+            push @$tickets, $ticket
+              unless grep { $ticket->id eq $_->id } @$tickets;
+            next if $checked->{ $ticket->id }++;
+
+            for my $related (
+                grep { !$checked->{ $_->id } } _RelatedTickets(
+                    $ticket,    'MemberOf', 'DependsOn', 'DependedOnBy',
+                    'RefersTo', 'ReferredToBy'
+                )
+              )
+            {
+                push @$to_be_checked, $related;
+                __GetOrderedTickets( $tickets, $to_be_checked, $checked );
+            }
+        }
+
+    }
+}
+
+sub _ParentTicket {
+    my $ticket = shift;
+    if ( $ticket->MemberOf->Count ) {
+        # skip the remote links
+        next unless $ticket->MemberOf->First->TargetObj;
+        return $ticket->MemberOf->First->TargetObj;
+    }
+    return;
 }
 
 1;
