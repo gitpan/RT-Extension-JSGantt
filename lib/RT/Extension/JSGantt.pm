@@ -58,7 +58,7 @@ RT::Extension::JSGantt - Gantt charts for your tickets
 
 package RT::Extension::JSGantt;
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 use warnings;
 use strict;
@@ -134,9 +134,11 @@ sub TicketsInfo {
     my ( $min_start, $min_start_obj );
 
     my %color_map;
+    $options{ColorSchemeByOwner} = 1 unless exists $options{ColorSchemeByOwner};
     if ( $options{ColorSchemeByOwner} ) {
         my @owner_names = uniq map { $_->OwnerObj->Name } @{ $args{Tickets} };
-        @color_map{@owner_names} = @colors[0 .. $#owner_names];
+        @color_map{@owner_names} =
+          (@colors) x ( int @colors / @owner_names + 1 );
         if (   ref $options{ColorSchemeByOwner}
             && ref $options{ColorSchemeByOwner} eq 'HASH' )
         {
