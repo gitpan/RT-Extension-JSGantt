@@ -96,6 +96,15 @@ or add C<RT::Extension::JSGantt> to your existing C<@Plugins> line.
         ShowProgress  => 1,
         ShowDuration  => 1,
 
+        # Configurable JSGantt options
+        # https://code.google.com/p/jsgantt/wiki/Documentation#4._Instantiate_JSGantt_using_()
+        # CaptionType       => 'Resource',
+        # ShowStartDate     => 1,
+        # ShowEndDate       => 1,
+        # DateInputFormat   => 'mm/dd/yyyy',
+        # DateDisplayFormat => 'mm/dd/yyyy',
+        # FormatArr         => q|'day','week','month','quarter'|,
+
         # define your own color scheme:
         # ColorScheme => ['ff0000', 'ffff00', 'ff00ff', '00ff00', '00ffff', '0000ff'],
 
@@ -122,7 +131,7 @@ or add C<RT::Extension::JSGantt> to your existing C<@Plugins> line.
 
 package RT::Extension::JSGantt;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use warnings;
 use strict;
