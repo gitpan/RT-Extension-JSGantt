@@ -25,3 +25,4 @@ MANIFEST			This list of files
 META.yml
 README
 static/css/jsgantt.css
+SIGNATURE                                Public-key signature (added by MakeMaker)

@@ -1,0 +1,50 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.73.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 4c9803982202b50440315ca88ad382c202ce9322 Changes
+SHA1 db50c435ea5b9751a74add108ee11a71a7138fb6 MANIFEST
+SHA1 ff2582db9f5d6b82fddb9b49f1fe06085653d8d7 META.yml
+SHA1 79f0e90a44d85be8eb46740322f649db36c46c18 Makefile.PL
+SHA1 ec1faf9efcb198bf63adab4bfce64f33422d3f35 README
+SHA1 baed5dd8d2144a63b487291e0e665b0905b1303d html/Callbacks/JSGantt/Elements/Header/Head
+SHA1 9939e7abfd1f2d5c2324b781f2b962b4fcf12801 html/Callbacks/JSGantt/Elements/Tabs/Privileged
+SHA1 591eb7ff71c379c9f7781a34a08f79b04ba85951 html/Callbacks/JSGantt/Search/Elements/ResultViews/AfterTools
+SHA1 213bb9ea4ea7643f79d2fda5f75ae13b9fa6972d html/Callbacks/JSGantt/Ticket/Elements/ShowSummary/LinksExtra
+SHA1 d990ab77d8edc6b5dc516a43b9eeaa59496ce647 html/NoAuth/js/jsgantt.js
+SHA1 28955442d8ddcc7a1a24c6521e3e299d3ccba599 html/Search/JSGantt.html
+SHA1 9b5001bfa9cf8607b3b3935284d9253e0391c9f1 inc/Module/Install.pm
+SHA1 cab0e564f9bdf658535f683aa197157e06d0dcea inc/Module/Install/Base.pm
+SHA1 a1559b5b3b40f68efbbd256f4fef85970891b3ae inc/Module/Install/Can.pm
+SHA1 f15c1ba85f6d52e70c48c64bf0752c90a4ad66f9 inc/Module/Install/Fetch.pm
+SHA1 d44d96acd20793306dd201030c688e2a7d3083ee inc/Module/Install/Include.pm
+SHA1 eb48df8bafd07c6a862126d9b274df42b4395742 inc/Module/Install/Makefile.pm
+SHA1 95c73873c6c3cb7024614c225c53863e1e90c134 inc/Module/Install/Metadata.pm
+SHA1 6e010ba20a9d0ae23d8d0ff516868c1e571c2d44 inc/Module/Install/RTx.pm
+SHA1 3fdf4c0cffdb1a2e23e5cd26bf95be553f1f9590 inc/Module/Install/RTx/Runtime.pm
+SHA1 79f5b4199f622e8b05aac266b0c39f6a85bb303f inc/Module/Install/ReadmeFromPod.pm
+SHA1 f8b2ae3386f6ba26c33408968a953d450842eade inc/Module/Install/Win32.pm
+SHA1 f302bc703d76299cff243e5b44cecd61aac27b76 inc/Module/Install/WriteAll.pm
+SHA1 4e09b598c2626e08cec2bed5e981492fa9e90967 inc/YAML/Tiny.pm
+SHA1 034d0f3a7401dae4be3eee279258181f51a4ad81 inc/unicore/Name.pm
+SHA1 239eb4f91f1368b61eba57bfa5b1f6ad2b29571c lib/RT/Extension/JSGantt.pm
+SHA1 94f9aefae3553aa2bd88b13fe174f6f8634daac9 static/css/jsgantt.css
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1
+
+iEYEARECAAYFAlSTVGYACgkQMflWJZZAbqCMIACgr5tukDZ6jHTJwClpbXNN3kEt
+4J8An1ZBnPbbuTaU0WL7urVDPzoGQlZe
+=WiJL
+-----END PGP SIGNATURE-----
